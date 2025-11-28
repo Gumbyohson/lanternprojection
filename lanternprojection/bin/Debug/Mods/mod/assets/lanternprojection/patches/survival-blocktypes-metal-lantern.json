@@ -1,8 +1,0 @@
-[
-  {
-    "op": "add",
-    "path": "/attributesByType/*-up/lightdistance",
-    "value": 21,
-    "file": "game:blocktypes/metal/lantern.json"
-  }
-]
