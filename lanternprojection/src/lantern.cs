@@ -51,6 +51,19 @@ namespace lanternprojection
         {
             this.sapi = sapi;
             sapi.World.RegisterGameTickListener(LanternTick, config.UpdateIntervalMs);
+
+            // Hook into player disconnect event to clean up lights
+            sapi.Event.PlayerDisconnect += (player) =>
+            {
+                CleanupPlayerLights(player);
+            };
+
+            // Hook into server initialization to clean up lingering lights immediately
+            sapi.Event.SaveGameLoaded += () =>
+            {
+                CleanupAllPlayerLights();
+                RemoveAllLingeringLights();
+            };
         }
 
         public override void StartClientSide(ICoreClientAPI capi)
@@ -74,28 +87,26 @@ namespace lanternprojection
                     byte[] currentLightHsv = null;
                     int currentLightDistance = 0;
 
-                    if (player.InventoryManager != null && player.InventoryManager.ActiveHotbarSlot != null)
+                    // Prioritize light sources: offhand -> main hand
+
+                    // Check for light source in the offhand slot first
+                    if (player.Entity.LeftHandItemSlot != null && IsValidLightSource(player.Entity.LeftHandItemSlot))
                     {
-                        ItemSlot slot = player.InventoryManager.ActiveHotbarSlot;
-                        if (slot.Itemstack?.Collectible?.Attributes?.KeyExists("lightdistance") == true)
-                        {
-                            hasLightSource = true;
-                            CollectibleObject lantern = slot.Itemstack.Collectible;
-                            currentLightHsv = lantern.GetLightHsv(api.World.BlockAccessor, currentPos, slot.Itemstack) ?? new byte[] { 7, 3, 5 };
-                            currentLightDistance = slot.Itemstack.Collectible.Attributes["lightdistance"].AsInt();
-                        }
+                        hasLightSource = true;
+                        ItemSlot slot = player.Entity.LeftHandItemSlot;
+                        CollectibleObject lantern = slot.Itemstack.Collectible;
+                        currentLightHsv = lantern.GetLightHsv(api.World.BlockAccessor, currentPos, slot.Itemstack) ?? new byte[] { 7, 3, 5 };
+                        currentLightDistance = slot.Itemstack.Collectible.Attributes["lightdistance"].AsInt();
                     }
 
-                    if (!hasLightSource && player.Entity.LeftHandItemSlot != null)
+                    // If no light source is found in the offhand, check the main hand (active hotbar slot)
+                    if (!hasLightSource && player.InventoryManager.ActiveHotbarSlot != null && IsValidLightSource(player.InventoryManager.ActiveHotbarSlot))
                     {
-                        ItemSlot slot = player.Entity.LeftHandItemSlot;
-                        if (slot.Itemstack?.Collectible?.Attributes?.KeyExists("lightdistance") == true)
-                        {
-                            hasLightSource = true;
-                            CollectibleObject lantern = slot.Itemstack.Collectible;
-                            currentLightHsv = lantern.GetLightHsv(api.World.BlockAccessor, currentPos, slot.Itemstack) ?? new byte[] { 7, 3, 5 };
-                            currentLightDistance = slot.Itemstack.Collectible.Attributes["lightdistance"].AsInt();
-                        }
+                        hasLightSource = true;
+                        ItemSlot slot = player.InventoryManager.ActiveHotbarSlot;
+                        CollectibleObject lantern = slot.Itemstack.Collectible;
+                        currentLightHsv = lantern.GetLightHsv(api.World.BlockAccessor, currentPos, slot.Itemstack) ?? new byte[] { 7, 3, 5 };
+                        currentLightDistance = slot.Itemstack.Collectible.Attributes["lightdistance"].AsInt();
                     }
 
                     if (!playerStates.TryGetValue(player, out PlayerLightState state))
@@ -151,8 +162,60 @@ namespace lanternprojection
                         state.LastLightHsv = currentLightHsv?.ToArray();
                         state.LastLightDistance = currentLightDistance;
                     }
+
+                    // Prevent cleanup of lights if the lantern is out
+                    if (hasLightSource)
+                    {
+                        if (playerLights.TryGetValue(player, out var activeLights))
+                        {
+                            foreach (var light in activeLights)
+                            {
+                                if (light != null && light.Alive)
+                                {
+                                    light.WatchedAttributes.SetInt("lifetime", int.MaxValue); // Extend lifetime indefinitely
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Shorten light lifetime if the player doesn't have their lantern out
+                    if (!hasLightSource && playerLights.TryGetValue(player, out var lights))
+                    {
+                        foreach (var light in lights)
+                        {
+                            if (light != null && light.Alive)
+                            {
+                                sapi.World.RegisterCallback((dt) => light.Die(EnumDespawnReason.Expire, null), 500); // Delay removal slightly
+                            }
+                        }
+                        lights.Clear();
+                        playerLights.Remove(player);
+                    }
                 }
             }
+        }
+
+        private bool IsValidLightSource(ItemSlot slot)
+        {
+            if (slot.Itemstack?.Collectible?.Attributes?.KeyExists("lightdistance") == true)
+            {
+                string itemCode = slot.Itemstack.Collectible.Code?.Path;
+                // Restrict to specific items (e.g., lanterns)
+                return itemCode != null && itemCode.Contains("lantern");
+            }
+            return false;
+        }
+
+        private bool IsValidWearableLightSource(ItemSlot slot)
+        {
+            if (slot.Itemstack?.Collectible?.Attributes?.KeyExists("lightdistance") == true)
+            {
+                string itemCode = slot.Itemstack.Collectible.Code?.Path;
+                // Check for wearable light sources (e.g., backpacks or headlamps)
+                return itemCode != null && (itemCode.Contains("backpack") || itemCode.Contains("headlamp"));
+            }
+            return false;
         }
 
         private void CleanupPlayerLights(IPlayer player)
@@ -161,7 +224,7 @@ namespace lanternprojection
             {
                 foreach (var light in lights)
                 {
-                    if (light != null && light.Alive)
+                    if (light != null && light.Alive && light.WatchedAttributes.GetString("ownerUid") == player.PlayerUID)
                     {
                         light.Die(EnumDespawnReason.Expire, null);
                     }
@@ -208,10 +271,30 @@ namespace lanternprojection
             light.Pos.SetFrom(spawnloc);
             light.PositionBeforeFalling.Set(spawnloc);
             light.WatchedAttributes.SetBytes("hsv", lighthsv);
+            light.WatchedAttributes.SetString("ownerUid", player.PlayerUID);
             sapi.World.SpawnEntity(light);
             lights.Add(light);
 
             playerLights[player] = lights;
+        }
+
+        public void CleanupAllPlayerLights()
+        {
+            foreach (var player in playerLights.Keys.ToList())
+            {
+                CleanupPlayerLights(player);
+            }
+        }
+
+        private void RemoveAllLingeringLights()
+        {
+            foreach (var entity in sapi.World.LoadedEntities.Values)
+            {
+                if (entity.Code?.Path == "light" && entity.WatchedAttributes.GetString("ownerUid") == null)
+                {
+                    entity.Die(EnumDespawnReason.Expire, null);
+                }
+            }
         }
     }
 
