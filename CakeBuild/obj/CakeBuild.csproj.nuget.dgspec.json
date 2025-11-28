@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj": {}
+    "C:\\Users\\Gumby\\source\\repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj": {
+    "C:\\Users\\Gumby\\source\\repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
+        "projectUniqueName": "C:\\Users\\Gumby\\source\\repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
         "projectName": "CakeBuild",
-        "projectPath": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
+        "projectPath": "C:\\Users\\Gumby\\source\\repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
         "packagesPath": "C:\\Users\\Gumby\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\obj\\",
+        "outputPath": "C:\\Users\\Gumby\\source\\repos\\lanternprojection\\CakeBuild\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

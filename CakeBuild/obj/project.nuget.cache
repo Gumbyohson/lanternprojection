@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "s5d3I5YEky4=",
+  "dgSpecHash": "804ZJX83Abc=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
+  "projectFilePath": "C:\\Users\\Gumby\\source\\repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Gumby\\.nuget\\packages\\autofac\\8.1.1\\autofac.8.1.1.nupkg.sha512",
     "C:\\Users\\Gumby\\.nuget\\packages\\cake.cli\\5.0.0\\cake.cli.5.0.0.nupkg.sha512",

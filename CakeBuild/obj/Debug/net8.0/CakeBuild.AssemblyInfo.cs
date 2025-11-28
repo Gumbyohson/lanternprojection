@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CakeBuild")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+de8bb67a2127df5bf2586e0cc064b20b2064bc7b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+95b0dfe26b1d91f88cf07bc4d88941a55dbf6a3b")]
 [assembly: System.Reflection.AssemblyProductAttribute("CakeBuild")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CakeBuild")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
