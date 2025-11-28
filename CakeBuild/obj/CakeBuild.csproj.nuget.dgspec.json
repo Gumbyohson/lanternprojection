@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\lanternprojection\\lanternprojection.csproj": {}
+    "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\lanternprojection\\lanternprojection.csproj": {
+    "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\lanternprojection\\lanternprojection.csproj",
-        "projectName": "lanternprojection",
-        "projectPath": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\lanternprojection\\lanternprojection.csproj",
+        "projectUniqueName": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
+        "projectName": "CakeBuild",
+        "projectPath": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\CakeBuild.csproj",
         "packagesPath": "C:\\Users\\Gumby\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\lanternprojection\\obj\\",
+        "outputPath": "C:\\Users\\Gumby\\Source\\Repos\\lanternprojection\\CakeBuild\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -49,6 +49,20 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
+          "dependencies": {
+            "Cake.Frosting": {
+              "target": "Package",
+              "version": "[5.0.0, )"
+            },
+            "Cake.Json": {
+              "target": "Package",
+              "version": "[7.0.1, )"
+            },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.3, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
