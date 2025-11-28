@@ -1,0 +1,21 @@
+{
+  "code": "light",
+  "class": "EntityLight",
+  "hitboxSize": { "x": 0, "y": 0 },
+  "drops": [],
+  "client": {
+    "renderer": "Shape",
+    "pitchStep": false,
+    "shape": { "base": "lanternprojection:entity/air/light" },
+    "behaviors": [
+      { "code": "passivephysics", "groundDragFactor": 0, "waterDragFactor": 0, "airDragFactor": 0, "gravityFactor": 0 },
+      {"code": "interpolateposition", "interpolationSpeed": 50, "teleportDistance": 0.1}
+    ]
+  },
+  "server": {
+    "behaviors": [
+      { "code": "passivephysics", "groundDragFactor": 0, "waterDragFactor": 0, "airDragFactor": 0, "gravityFactor": 0 },
+      { "code": "despawn", "minPlayerDistance": -1, "minSeconds": 30 }
+    ]
+  }
+}

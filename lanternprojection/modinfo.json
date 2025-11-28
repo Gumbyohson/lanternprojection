@@ -1,0 +1,10 @@
+{
+  "Type": "code",
+  "Name": "lanternprojection",
+  "Version": "0.0.1",
+  "Description": "Projects light ahead of the player with a lantern out.",
+  "Website": "",
+  "ModID": "lanternprojection",
+  "Authors": ["Gumbyohson"],
+	"dependencies": {}
+}
