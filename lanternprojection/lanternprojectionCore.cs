@@ -10,7 +10,7 @@ using Vintagestory.API.Common;
     Authors = new[] { "Gumbyohson" })]
 
 namespace lanternprojection;
-public class lanternprojectionCore : ModSystem
+public class LanternProjectionCore : ModSystem
 {
     public static ILogger Logger { get; private set; }
     public static string ModId { get; private set; }
