@@ -1,7 +1,7 @@
 {
   "Type": "code",
   "Name": "lanternprojection",
-  "Version": "1.0.0",
+  "Version": "1.0.1",
   "Description": "Projects light ahead of the player with a lantern out.",
   "Website": "",
   "ModID": "lanternprojection",

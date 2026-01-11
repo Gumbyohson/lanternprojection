@@ -38,6 +38,8 @@ namespace lanternprojection
         public byte[] LastLightHsv { get; set; }
         public int TicksSinceLastCheck { get; set; } = 0;
         public string LastCheckedItemCode { get; set; } = "";
+        // Keep the last snapshot of inventory slot codes so debug logs only show when the inventory changes
+        public Dictionary<string, string> LastInventorySnapshot { get; set; } = new Dictionary<string, string>();
     }
 
     public class LanternMod : ModSystem
@@ -127,11 +129,10 @@ namespace lanternprojection
                     BlockPos currentPos = player.Entity.Pos.AsBlockPos;
                     double currentYaw = player.Entity.Pos.Yaw;
 
-                    var (hasLightSource, currentLightHsv) = GetCurrentLightSource(player, currentPos);
-
+                    PlayerLightState state = null;
                     lock (stateLock)
                     {
-                        if (!playerStates.TryGetValue(player, out PlayerLightState state))
+                        if (!playerStates.TryGetValue(player, out state))
                         {
                             state = new PlayerLightState
                             {
@@ -140,6 +141,12 @@ namespace lanternprojection
                             };
                             playerStates[player] = state;
                         }
+
+                        // Get the current light while holding the state lock so we can update
+                        // the per-player inventory snapshot for debug logging
+                        var tuple = GetCurrentLightSource(player, currentPos, state);
+                        bool hasLightSource = tuple.hasLight;
+                        byte[] currentLightHsv = tuple.lightHsv;
 
                         // Kill dead lights
                         if (playerLights.TryGetValue(player, out var existingLight))
@@ -182,48 +189,217 @@ namespace lanternprojection
             }
         }
 
-        private (bool hasLight, byte[] lightHsv) GetCurrentLightSource(IPlayer player, BlockPos currentPos)
+        private (bool hasLight, byte[] lightHsv) GetCurrentLightSource(IPlayer player, BlockPos currentPos, PlayerLightState state)
         {
-            byte[] defaultHsv = new byte[] { 7, 3, 5 };
-            var validLights = new List<(byte[] hsv, byte brightness)>();
-
-            // Check offhand
-            if (player.Entity.LeftHandItemSlot != null && IsValidLightSource(player.Entity.LeftHandItemSlot))
+            try
             {
-                byte[] hsv = GetLightHsv(player.Entity.LeftHandItemSlot, currentPos, defaultHsv);
-                validLights.Add((hsv, hsv[2]));
-            }
+                byte[] defaultHsv = new byte[] { 7, 3, 5 };
+                var validLights = new List<(byte[] hsv, byte brightness)>();
 
-            // Check main hand
-            if (player.InventoryManager.ActiveHotbarSlot != null && IsValidLightSource(player.InventoryManager.ActiveHotbarSlot))
-            {
-                byte[] hsv = GetLightHsv(player.InventoryManager.ActiveHotbarSlot, currentPos, defaultHsv);
-                validLights.Add((hsv, hsv[2]));
-            }
-
-            // Check worn gear for headlamps and backpacks
-            foreach (var inventory in player.InventoryManager.Inventories)
-            {
-                string invClassName = inventory.Value?.ClassName ?? "";
-                if (invClassName.Contains("character") || invClassName.Contains("backpack") || 
-                    invClassName.Contains("gear") || invClassName.Contains("wearable"))
+                // Check offhand
+                if (player.Entity.LeftHandItemSlot != null && IsValidLightSource(player.Entity.LeftHandItemSlot))
                 {
-                    foreach (var slot in inventory.Value)
+                    byte[] hsv = GetLightHsv(player.Entity.LeftHandItemSlot, currentPos, defaultHsv);
+                    validLights.Add((hsv, hsv[2]));
+                }
+
+                // Check main hand / active hotbar
+                if (player.InventoryManager.ActiveHotbarSlot != null && IsValidLightSource(player.InventoryManager.ActiveHotbarSlot))
+                {
+                    byte[] hsv = GetLightHsv(player.InventoryManager.ActiveHotbarSlot, currentPos, defaultHsv);
+                    validLights.Add((hsv, hsv[2]));
+                }
+
+                // Scan other inventories (worn gear, backpacks, etc.)
+                foreach (var invKvp in player.InventoryManager.Inventories)
+                {
+                    var inv = invKvp.Value;
+                    if (inv == null) continue;
+
+                    string invClassName = (inv.ClassName ?? "").ToLowerInvariant();
+                    string invTypeName = inv.GetType().Name ?? "";
+
+                    // Skip inventories that are known to throw when enumerated (creative/editor inventories)
+                    if (invTypeName.IndexOf("Creative", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        invTypeName.IndexOf("Editor", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        if (slot != null && !slot.Empty && IsValidLightSource(slot))
+                        if (config.DebugLogging)
                         {
-                            byte[] hsv = GetLightHsv(slot, currentPos, defaultHsv);
-                            validLights.Add((hsv, hsv[2]));
+                            try
+                            {
+                                // Log this skip only once per player/inventory so it doesn't spam the logs
+                                string key = "skiptype:" + (inv.ClassName ?? invTypeName);
+                                string prev;
+                                if (state != null)
+                                {
+                                    state.LastInventorySnapshot.TryGetValue(key, out prev);
+                                    if (prev != invTypeName)
+                                    {
+                                        DebugLog($"Skipping inventory type {invTypeName} for {player.PlayerName}");
+                                        state.LastInventorySnapshot[key] = invTypeName;
+                                    }
+                                }
+                                else
+                                {
+                                    DebugLog($"Skipping inventory type {invTypeName} for {player.PlayerName}");
+                                }
+                            }
+                            catch { }
+                        }
+
+                        continue;
+                    }
+
+                    // If this is a backpack inventory and ABCS support is disabled, skip it
+                    if (invClassName.Contains("backpack") && !config.EnableABCSReduxBackpacks)
+                    {
+                        if (config.DebugLogging) try { DebugLog($"Skipping backpack inventory for {player.PlayerName}"); } catch { }
+                        continue;
+                    }
+
+                    // Only inspect character, gear, wearable inventories or allowed backpack inventories
+                    if (!(invClassName.Contains("character") || invClassName.Contains("gear") || invClassName.Contains("wearable") || invClassName.Contains("backpack")))
+                    {
+                        continue;
+                    }
+
+                    // Debug: list inventory slot codes, but only when the contents actually change
+                    if (config.DebugLogging)
+                    {
+                        try
+                        {
+                            int si = 0;
+                            // Build a snapshot string of this inventory's slot codes
+                            var codes = new List<string>();
+                            foreach (var s in inv)
+                            {
+                                string code = s?.Itemstack?.Collectible?.Code?.ToString() ?? "empty";
+                                codes.Add(code);
+                                si++;
+                            }
+
+                            string snapshot = string.Join(',', codes);
+                            string prevSnapshot = null;
+                            if (state != null)
+                            {
+                                state.LastInventorySnapshot.TryGetValue(inv.ClassName ?? si.ToString(), out prevSnapshot);
+                            }
+
+                            if (prevSnapshot != snapshot)
+                            {
+                                // Dump per-slot info only when the inventory changed
+                                si = 0;
+                                foreach (var s in inv)
+                                {
+                                    string code = s?.Itemstack?.Collectible?.Code?.ToString() ?? "empty";
+                                    DebugLog($"{player.PlayerName} inv '{inv.ClassName}' slot[{si}] = {code}");
+                                    si++;
+                                }
+
+                                if (state != null)
+                                {
+                                    state.LastInventorySnapshot[inv.ClassName ?? si.ToString()] = snapshot;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            try { DebugLog($"{player.PlayerName} inv '{inv.ClassName}' slot iteration failed: {ex.Message}"); } catch { }
                         }
                     }
+
+                    try
+                    {
+                        int slotIndex = 0;
+                        foreach (var slot in inv)
+                        {
+                            if (slot == null || slot.Empty)
+                            {
+                                slotIndex++;
+                                continue;
+                            }
+
+                            // For backpack inventories only check slots 0-3 when ABCS support is on (those are attachable)
+                            if (invClassName.Contains("backpack"))
+                            {
+                                if (!config.EnableABCSReduxBackpacks)
+                                {
+                                    slotIndex++;
+                                    continue;
+                                }
+
+                                if (slotIndex > 3)
+                                {
+                                    // ignore non-attachable backpack content
+                                    slotIndex++;
+                                    continue;
+                                }
+
+                                var slotDomain = slot.Itemstack?.Collectible?.Code?.Domain ?? "";
+                                var slotPath = slot.Itemstack?.Collectible?.Code?.Path ?? "";
+
+                                // Only accept items from the ABCSRedux mod in the first 4 backpack slots
+                                if (!slotDomain.Equals("abcsredux", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    if (config.DebugLogging)
+                                    {
+                                        try { DebugLog($"Skipping backpack slot item {slotDomain}:{slotPath} for {player.PlayerName}"); } catch { }
+                                    }
+                                    slotIndex++;
+                                    continue;
+                                }
+                            }
+
+                            if (IsValidLightSource(slot))
+                            {
+                                byte[] hsv = GetLightHsv(slot, currentPos, defaultHsv);
+                                validLights.Add((hsv, hsv[2]));
+                            }
+
+                            slotIndex++;
+                        }
+                     }
+                     catch (Exception ex)
+                     {
+                         try { DebugLog($"{player.PlayerName} inv '{inv.ClassName}' slot processing failed: {ex.Message}"); } catch { }
+                     }
+                }
+
+                if (validLights.Count == 0)
+                    return (false, null);
+
+                var brightest = validLights.OrderByDescending(l => l.brightness).First();
+                return (true, brightest.hsv);
+            }
+            catch (Exception ex)
+            {
+                try { DebugLog($"GetCurrentLightSource failed: {ex.Message}"); } catch { }
+
+                // Fallback: only consider hands to avoid crashes
+                try
+                {
+                    byte[] defaultHsv = new byte[] { 7, 3, 5 };
+                    var validLights = new List<(byte[] hsv, byte brightness)>();
+                    if (player?.Entity?.LeftHandItemSlot != null && IsValidLightSource(player.Entity.LeftHandItemSlot))
+                    {
+                        byte[] hsv = GetLightHsv(player.Entity.LeftHandItemSlot, currentPos, defaultHsv);
+                        validLights.Add((hsv, hsv[2]));
+                    }
+                    if (player?.InventoryManager?.ActiveHotbarSlot != null && IsValidLightSource(player.InventoryManager.ActiveHotbarSlot))
+                    {
+                        byte[] hsv = GetLightHsv(player.InventoryManager.ActiveHotbarSlot, currentPos, defaultHsv);
+                        validLights.Add((hsv, hsv[2]));
+                    }
+                    if (validLights.Count == 0)
+                        return (false, null);
+                    var brightest = validLights.OrderByDescending(l => l.brightness).First();
+                    return (true, brightest.hsv);
+                }
+                catch
+                {
+                    return (false, null);
                 }
             }
-
-            if (validLights.Count == 0)
-                return (false, null);
-
-            var brightest = validLights.OrderByDescending(l => l.brightness).First();
-            return (true, brightest.hsv);
         }
 
         private byte[] GetLightHsv(ItemSlot slot, BlockPos pos, byte[] defaultHsv)
